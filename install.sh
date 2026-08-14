@@ -188,7 +188,12 @@ if [ -z "$SHARP_VER" ]; then
 fi
 log "安装 sharp@$SHARP_VER 的 WebAssembly 兜底 (@img/sharp-wasm32)"
 
-if [ -f "$D/node_modules/@img/sharp-wasm32/sharp.node" ]; then
+# 注意：@img/sharp-wasm32 包内没有名为 sharp.node 的文件——顶层 "./sharp.node" 是
+# exports 映射到 index.cjs 的虚拟入口，真实产物是 lib/sharp-wasm32-<ver>.node.{js,wasm}，
+# 所以用「包目录 + lib/*.wasm」判断是否就位。
+wasm_present() { [ -d "$1" ] && ls "$1"/lib/*.wasm >/dev/null 2>&1; }
+
+if wasm_present "$D/node_modules/@img/sharp-wasm32"; then
   ok "@img/sharp-wasm32 已存在，跳过"
 else
   SWDIR="$HOME/.dsh-termux-sw"
@@ -204,8 +209,8 @@ else
       exit 1
     fi
   fi
-  if [ ! -f node_modules/@img/sharp-wasm32/sharp.node ]; then
-    fail "sharp-wasm32 安装结果异常（sharp.node 不存在）"
+  if ! wasm_present node_modules/@img/sharp-wasm32; then
+    fail "sharp-wasm32 安装结果异常（未找到 lib/*.wasm）"
     exit 1
   fi
   rm -rf "$D/node_modules/@img/sharp-wasm32" "$D/node_modules/@emnapi"
@@ -216,7 +221,7 @@ else
   fi
   cd "$HOME" || exit 1
   rm -rf "$SWDIR"
-  if [ ! -f "$D/node_modules/@img/sharp-wasm32/sharp.node" ]; then
+  if ! wasm_present "$D/node_modules/@img/sharp-wasm32"; then
     fail "sharp-wasm32 复制到 dsh 失败"
     exit 1
   fi

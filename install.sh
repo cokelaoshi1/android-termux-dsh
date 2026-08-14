@@ -82,14 +82,24 @@ ok "Node $(node -v)"
 
 # ---- 3. npm 镜像与 install-scripts 放行 -----------------------------------------
 ALLOW_LIST="@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs"
-log "配置 npm allow-scripts 放行原生模块构建脚本"
-npm config set allow-scripts="$ALLOW_LIST" --location=user || warn "npm 不支持 allow-scripts 配置（旧版 npm，忽略）"
+log "配置 npm：install-scripts 放行 + 网络超时调优"
+if npm config set allow-scripts="$ALLOW_LIST" --location=user 2>/dev/null; then
+  ok "npm install-scripts 已放行（新 npm 安全门）"
+else
+  warn "当前 npm 不支持 allow-scripts（较旧版本）——旧 npm 默认会执行构建脚本，可忽略此警告"
+fi
 
 if [ "$CN_MODE" -eq 1 ]; then
   log "使用 npmmirror 镜像源（--cn）"
   npm config set registry https://registry.npmmirror.com --location=user
   warn "若 pkg 更新源也慢/失败，可运行 termux-change-repo 选择国内镜像"
 fi
+
+# 弱网/慢网健壮性：加大 npm 下载超时与重试，避免一次抖动就失败
+npm config set fetch-retries 5 --location=user 2>/dev/null || true
+npm config set fetch-retry-mintimeout 20000 --location=user 2>/dev/null || true
+npm config set fetch-retry-maxtimeout 120000 --location=user 2>/dev/null || true
+npm config set fetch-timeout 300000 --location=user 2>/dev/null || true
 
 # ---- 4. node-gyp common.gypi 补丁（android_ndk_path）--------------------------
 log "预下载 Node 头文件并修补 common.gypi"
@@ -123,29 +133,41 @@ PY
 patch_common_gypi
 
 # ---- 5. 全局安装 @deepseek-ai/dsh ---------------------------------------------
-log "npm install -g @deepseek-ai/dsh（koffi 源码编译需要几分钟）"
+# 网络预检：官方源连不通就直接切 npmmirror，避免"黑网挂死、无任何输出"
+if [ "$CN_MODE" -eq 0 ]; then
+  if ! curl -fsS --max-time 8 -o /dev/null https://registry.npmjs.org/-/ping 2>/dev/null; then
+    warn "registry.npmjs.org 连接超时 → 自动切换 npmmirror 镜像源"
+    npm config set registry https://registry.npmmirror.com --location=user
+  fi
+fi
+
+log "开始安装 @deepseek-ai/dsh —— 这是最耗时的一步（下载数百个包 + koffi 源码编译，约 5~15 分钟）"
+log "下载阶段可能长时间无输出，属正常；请保持屏幕常亮，不要关闭 Termux"
 export CFLAGS="-target $TARGET"
 export CXXFLAGS="-target $TARGET"
-if ! npm install -g --foreground-scripts @deepseek-ai/dsh; then
+# 限制编译并行度，避免低内存机型在编译 koffi 时被系统杀掉（OOM）
+export CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+if ! npm install -g --foreground-scripts --no-audit --no-fund @deepseek-ai/dsh; then
   warn "首次安装失败，修补 common.gypi 后重试一次"
   patch_common_gypi
   if [ "$CN_MODE" -eq 0 ]; then
     warn "仍失败则自动切换 npmmirror 镜像源再试（中国大陆网络常见）"
     npm config set registry https://registry.npmmirror.com --location=user || true
   fi
-  npm install -g --foreground-scripts @deepseek-ai/dsh
+  npm install -g --foreground-scripts --no-audit --no-fund @deepseek-ai/dsh
 fi
-unset CFLAGS CXXFLAGS
+unset CFLAGS CXXFLAGS CMAKE_BUILD_PARALLEL_LEVEL
 
 # 硬性检查：npm 装完必须有 dsh 命令，否则立刻报错（而不是最后才暴露）
 if ! command -v dsh >/dev/null 2>&1; then
   echo ""
   echo "✗✗ 错误: npm 安装结束后仍未找到 dsh 命令 ✗✗"
   echo "   说明上面 npm install 实际失败了（常见原因）："
-  echo "   1) 网络问题：npm 官方源超时/断连 —— 中国大陆网络请加 --cn 参数重跑，或先: npm config set registry https://registry.npmmirror.com"
-  echo "   2) 磁盘空间不足 —— 检查: df -h \$PREFIX"
-  echo "   3) 编译失败 —— 向上翻终端找 \"npm error\" 开头的行，把最后 20 行发到仓库 issue"
-  echo "   4) 若反复失败，可重跑本脚本（幂等，会自动续上）"
+  echo "   1) 网络黑洞/超时：安装阶段长时间（>15分钟）无任何输出 —— 用 --cn 参数重跑，或确认 VPN/代理"
+  echo "   2) 进程被杀：手机内存不足（OOM）或 Termux 被系统回收 —— 关闭后台应用后重跑，装前执行 termux-wake-lock"
+  echo "   3) 磁盘空间不足 —— 检查: df -h \$PREFIX"
+  echo "   4) 编译失败 —— 向上翻终端找 \"npm error\" 开头的行，把最后 20 行发到仓库 issue"
+  echo "   5) 本脚本幂等，任何一步失败直接重跑即可续上"
   exit 1
 fi
 ok "dsh 命令已就位: $(command -v dsh)"

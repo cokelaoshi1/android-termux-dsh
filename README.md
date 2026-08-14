@@ -64,6 +64,25 @@ dsh web
 - 电脑访问：`dsh web --host 0.0.0.0`，浏览器打开 `http://手机局域网IP:3080`
 - 首次使用请在 Web UI 的 **设置 → 模型** 里配置 LLM API Key
 
+### 默认工作区 = sdcard（直接读写手机存储）
+
+安装脚本默认做两件事，让网页版能直接读写手机存储：
+
+1. **授权存储权限**：执行 `termux-setup-storage`，Android 11+ 会跳转「所有文件访问」设置页，允许后生成 `~/storage/shared` 等链接；
+2. **固定工作区**：往 `~/.dsh/profiles/web/cordis.patch.yml` 写入：
+
+```yaml
+- id: fs-sandbox
+  config:
+    cwd: /data/data/com.termux/files/home/storage/shared
+```
+
+这样 Web UI 的文件树、工作区根目录就是 sdcard（`~/storage/shared`），不再局限于启动 `dsh web` 时的目录。
+
+- 安装时自定义工作区：`DSH_WORKSPACE=/path/to/dir bash install.sh`；跳过：`DSH_WORKSPACE="" bash install.sh`
+- 想改默认值：编辑上面那个 `cordis.patch.yml` 的 `cwd`，重启 `dsh web` 生效
+- 若提示「未找到 ~/storage/shared」：到 系统设置 → 应用 → Termux → 权限，手动允许「文件和媒体」后重跑脚本
+
 ### 脚本做了什么
 
 1. 环境预检（Termux / 架构）
@@ -75,9 +94,10 @@ dsh web
 7. `npm i -g @deepseek-ai/dsh`（带 API 30 编译参数，koffi 源码编译）
 8. 安装 sharp WebAssembly 兜底
 9. 安装 `--expose-internals` 启动包装器 + pnpm
-10. 逐项验证（dsh / koffi / node-pty / sharp）
+10. sdcard 存储授权 + 默认工作区配置（fs-sandbox.cwd → `~/storage/shared`）
+11. 逐项验证（dsh / koffi / node-pty / sharp / sdcard）
 
-脚本**幂等**：任何一步失败直接重跑即可续上；重新执行过 `npm i -g @deepseek-ai/dsh` 后，也建议重跑一次恢复第 8、9 步。
+脚本**幂等**：任何一步失败直接重跑即可续上；重新执行过 `npm i -g @deepseek-ai/dsh` 后，也建议重跑一次恢复第 8、9、10 步。
 
 ### 故障排查
 
@@ -86,6 +106,7 @@ dsh web
 | node 启动报 OpenSSL 符号错误 / `error while loading shared libraries` | 先 `pkg update && pkg upgrade -y`（Termux 不支持部分升级） |
 | `CMake does not seem to be available` | 重跑脚本（会自动补装工具链） |
 | node-pty 报 `android_ndk_path` | 重跑脚本（common.gypi 补丁幂等） |
+| 网页版读不了 sdcard / 看不到手机存储 | 运行 `termux-setup-storage` 并允许权限（Android 11+ 需在系统设置中开启「所有文件访问」）；再确认 `~/.dsh/profiles/web/cordis.patch.yml` 里有 `fs-sandbox` 的 `cwd` 指向 `~/storage/shared` |
 | 会话保存报 `EACCES: permission denied, link ...` | 部分定制 ROM 全局禁用 `link()`。参考 [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) 把 `link()` 改成 `rename()` |
 | bash 工具报 `SANDBOX_UNAVAILABLE` | 沙箱需要 Landlock（内核 >= 5.13）。老内核机型需自建 proot runner，见 [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 
@@ -158,6 +179,25 @@ dsh web
 - From a PC: `dsh web --host 0.0.0.0`, then open `http://<phone-LAN-IP>:3080`
 - Configure your LLM API key in the Web UI under **Settings → Models**
 
+### Default workspace = sdcard (read/write phone storage)
+
+The installer sets up two things by default so the web UI can read/write phone storage:
+
+1. **Storage permission**: runs `termux-setup-storage` (on Android 11+ this opens the "All files access" settings page); this creates the `~/storage/shared` link.
+2. **Pinned workspace**: writes to `~/.dsh/profiles/web/cordis.patch.yml`:
+
+```yaml
+- id: fs-sandbox
+  config:
+    cwd: /data/data/com.termux/files/home/storage/shared
+```
+
+The Web UI's file tree / workspace root is then the sdcard (`~/storage/shared`), regardless of where `dsh web` was launched.
+
+- Custom workspace at install time: `DSH_WORKSPACE=/path/to/dir bash install.sh`; skip: `DSH_WORKSPACE="" bash install.sh`
+- Change the default: edit `cwd` in `cordis.patch.yml` above and restart `dsh web`
+- If you see "~/storage/shared not found": grant storage to Termux manually (Settings → Apps → Termux → Permissions → Files and media) and re-run the script
+
 ### What the script does
 
 1. Preflight checks (Termux / architecture)
@@ -169,9 +209,10 @@ dsh web
 7. `npm i -g @deepseek-ai/dsh` (API 30 target; koffi built from source)
 8. Install the sharp WebAssembly fallback
 9. Install the `--expose-internals` launcher wrapper + pnpm
-10. Verify each piece (dsh / koffi / node-pty / sharp)
+10. Grant sdcard storage + pin the workspace (`fs-sandbox.cwd` → `~/storage/shared`)
+11. Verify each piece (dsh / koffi / node-pty / sharp / sdcard)
 
-The script is **idempotent**: re-run it after any failure to continue; re-run it too after reinstalling dsh via npm to restore steps 8–9.
+The script is **idempotent**: re-run it after any failure to continue; re-run it too after reinstalling dsh via npm to restore steps 8–10.
 
 ### Troubleshooting
 
@@ -180,6 +221,7 @@ The script is **idempotent**: re-run it after any failure to continue; re-run it
 | Node fails with an OpenSSL symbol error / `error while loading shared libraries` | run `pkg update && pkg upgrade -y` first (partial upgrades are unsupported) |
 | `CMake does not seem to be available` | re-run the script (toolchain is installed automatically) |
 | node-pty: `android_ndk_path` | re-run the script (the common.gypi patch is idempotent) |
+| Web UI cannot read the sdcard / phone storage | run `termux-setup-storage` and allow the permission (Android 11+ needs "All files access" in system settings); make sure `~/.dsh/profiles/web/cordis.patch.yml` pins `fs-sandbox.cwd` to `~/storage/shared` |
 | `EACCES: permission denied, link ...` when saving sessions | some custom ROMs block `link()`. See [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) and switch `link()` → `rename()` |
 | bash tool: `SANDBOX_UNAVAILABLE` | the sandbox needs Landlock (kernel >= 5.13). Older kernels need a custom proot runner — see [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 

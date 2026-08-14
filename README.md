@@ -5,6 +5,7 @@
 
 ![platform](https://img.shields.io/badge/platform-Android%20%2F%20Termux-green)
 ![arch](https://img.shields.io/badge/arch-arm64%20%7C%20armv7-blue)
+![tested](https://img.shields.io/badge/tested-Android%2016%20%2F%20aarch64-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-yellow)
 
 [中文](#中文) | [English](#english)
@@ -15,7 +16,17 @@
 
 ### 简介
 
-在 **Android Termux** 上从零一键安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`@deepseek-ai/dsh`）。**适用于全新安装的 Termux**：跑完 `install.sh` 一条命令，pkg 更新、工具链、Node、原生模块编译、运行时修补、存储权限全部自动完成，无需任何手动步骤。解决官方 `npm i -g` 在 Android/arm64 上无法完成的一连串原生编译与运行时问题。**无需 root**（有 root 也不影响），已在 **Android 16 / aarch64 / Termux** 实测通过。
+在 **Android Termux** 上**从零一键安装** [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`@deepseek-ai/dsh`）。**适用于全新安装的 Termux**：跑完 `install.sh` 一条命令，pkg 更新、工具链、Node、原生模块编译、运行时修补、存储权限全部自动完成，无需任何手动步骤。解决官方 `npm i -g` 在 Android/arm64 上无法完成的一连串原生编译与运行时问题。**无需 root**（有 root 也不影响），已在 **Android 16 / aarch64 / Termux** 实测通过。
+
+### 功能特性
+
+- ✅ **一站式**：全新 Termux 一条命令装到底，装完即用
+- ✅ **幂等**：任何一步失败，直接重跑即可续上；不重复下载已装好的部分
+- ✅ **网络自适应**：npm 官方源 8 秒连不通自动切 npmmirror；失败自动换源重试；下载超时/重试已调优
+- ✅ **防 OOM**：koffi 编译限制并行度，低内存机型不易被系统杀掉
+- ✅ **默认工作区 = sdcard**：网页版直接读写手机存储，无需手动配置
+- ✅ **自动验证**：装完逐项检查 dsh / koffi / node-pty / sharp / sdcard，失败即红字报错，不再静默
+- ✅ **中国大陆友好**：`--cn` 参数一键切换国内 npm 镜像
 
 ### 为什么需要它
 
@@ -39,6 +50,14 @@
 
 ### 快速开始
 
+在 Termux 里执行（免 clone，一行流）：
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/cokelaoshi1/android-termux-dsh/main/install.sh)"
+```
+
+或克隆后执行：
+
 ```sh
 pkg install -y git
 git clone https://github.com/cokelaoshi1/android-termux-dsh.git
@@ -46,17 +65,9 @@ cd android-termux-dsh
 bash install.sh
 ```
 
-或一行流（免 clone）：
-
-```sh
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/cokelaoshi1/android-termux-dsh/main/install.sh)"
-```
-
-> 脚本会执行 `pkg upgrade`，**务必等它跑完**。想跳过系统更新：`bash install.sh --skip-upgrade`。
->
-> 🇨🇳 **中国大陆网络**：npm 官方源可能超时，加 `--cn` 参数改用 npmmirror 镜像：`bash install.sh --cn`；`pkg` 更新源慢可运行 `termux-change-repo` 选国内镜像。
->
-> 安装结束后若提示 `No command dsh found`，说明 npm 安装步骤失败了——脚本现在会在失败点直接报错并给出排查提示（网络/磁盘/编译），或把最后 20 行输出发到 issue。
+> - 脚本会执行 `pkg upgrade`，**务必等它跑完**（Termux 不支持部分升级）。想跳过系统更新：`bash install.sh --skip-upgrade`
+> - 🇨🇳 **中国大陆网络**：建议直接 `bash install.sh --cn` 使用 npmmirror 镜像；不传也会自动检测（官方源连不通自动切换）
+> - 安装中最耗时的一步是 `npm install`（下载数百个包 + koffi 源码编译，约 5~15 分钟），**下载阶段长时间无输出属正常**，请保持屏幕常亮、不要关闭 Termux
 
 ### 安装完成后
 
@@ -89,28 +100,42 @@ dsh web
 
 ### 脚本做了什么（全新 Termux 一站式）
 
-1. 环境预检（Termux / 架构）
-2. `pkg update && pkg upgrade`（Termux 不支持部分升级，必须先完整升级）
+1. 环境预检（Termux / 架构，arm64/armv7 自动适配）
+2. `pkg update && pkg upgrade`（必须先完整升级）
 3. 安装基础工具与编译链：`git curl cmake clang make python binutils pkg-config libandroid-spawn`
 4. 安装/检查 Node >= 22.12（dsh 的硬性要求）
-5. 配置 npm：放行 install-scripts、可选 `--cn` 切换 npmmirror 镜像
-6. 修补 node-gyp `common.gypi`（`android_ndk_path`）
-7. `npm i -g @deepseek-ai/dsh`（带 API 30 编译参数，koffi 源码编译；失败自动切镜像重试）
-8. 安装 sharp WebAssembly 兜底
+5. 配置 npm：放行 install-scripts、加大下载超时与重试、`--cn` 切换 npmmirror
+6. 预下载 Node 头文件并修补 node-gyp `common.gypi`（`android_ndk_path`）
+7. 网络预检 → `npm i -g @deepseek-ai/dsh`（API 30 编译参数；koffi 源码编译，限并行防 OOM；失败自动换源重试；装完硬检查 `dsh` 命令）
+8. 安装 sharp WebAssembly 兜底（`@img/sharp-wasm32`，失败自动换源，幂等跳过）
 9. 安装 `--expose-internals` 启动包装器 + pnpm
 10. sdcard 存储授权 + 默认工作区配置（fs-sandbox.cwd → `~/storage/shared`）
 11. 逐项验证（dsh / koffi / node-pty / sharp / sdcard）并输出启动指引
 
 脚本**幂等**：任何一步失败直接重跑即可续上；重新执行过 `npm i -g @deepseek-ai/dsh` 后，也建议重跑一次恢复第 8、9、10 步。
 
+### 参数与环境变量
+
+| 参数 / 变量 | 说明 |
+|-------------|------|
+| `--skip-upgrade` | 跳过 `pkg update && pkg upgrade` |
+| `--cn` | 强制使用 npmmirror 镜像源（中国大陆网络推荐） |
+| `DSH_WORKSPACE=/path` | 安装时自定义默认工作区 |
+| `DSH_WORKSPACE=""` | 跳过 sdcard 工作区配置 |
+| `CMAKE_BUILD_PARALLEL_LEVEL=N` | 自定义 koffi 编译并行度（默认 2，内存小的手机可设 1） |
+
 ### 故障排查
 
 | 现象 | 处理 |
 |------|------|
 | node 启动报 OpenSSL 符号错误 / `error while loading shared libraries` | 先 `pkg update && pkg upgrade -y`（Termux 不支持部分升级） |
+| `npm error 'allow-scripts' is not a valid npm option` | **无害**：旧版 npm 没有该安全门，默认就会执行构建脚本，忽略即可 |
 | `CMake does not seem to be available` | 重跑脚本（会自动补装工具链） |
 | node-pty 报 `android_ndk_path` | 重跑脚本（common.gypi 补丁幂等） |
-| 网页版读不了 sdcard / 看不到手机存储 | 运行 `termux-setup-storage` 并允许权限（Android 11+ 需在系统设置中开启「所有文件访问」）；再确认 `~/.dsh/profiles/web/cordis.patch.yml` 里有 `fs-sandbox` 的 `cwd` 指向 `~/storage/shared` |
+| 安装后 `No command dsh found` | npm 安装失败。脚本会在失败点红字提示（网络/磁盘/编译/OOM），按提示处理；也可加 `--cn` 重跑 |
+| `npm install` 那步超过 15 分钟无任何输出 | 网络黑洞，Ctrl+C 后用 `--cn` 重跑，或检查代理/VPN |
+| 安装中途无报错就退出（旧版本脚本） | 已修复：所有步骤现在失败必红字。若仍遇到，把停住前后 10 行发 issue |
+| 网页版读不了 sdcard / 看不到手机存储 | 运行 `termux-setup-storage` 并允许权限（Android 11+ 需开启「所有文件访问」）；再确认 `cordis.patch.yml` 里 `fs-sandbox.cwd` 指向 `~/storage/shared` |
 | 会话保存报 `EACCES: permission denied, link ...` | 部分定制 ROM 全局禁用 `link()`。参考 [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) 把 `link()` 改成 `rename()` |
 | bash 工具报 `SANDBOX_UNAVAILABLE` | 沙箱需要 Landlock（内核 >= 5.13）。老内核机型需自建 proot runner，见 [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 
@@ -118,7 +143,7 @@ dsh web
 
 - Termux 的 clang 默认 target API 24，而 bionic 的 `statx()` 声明要 API >= 30 才可见，编译必须加 `-target aarch64-linux-android30`；
 - Termux 的 Node 把 `process.platform` 报成 `android`，node-gyp 会解析引用 `android_ndk_path` 的 `common.gypi`，而该变量只在用 NDK 编译 Node 时才定义；
-- npm 11.19+ 默认拦截 install-scripts，导致 koffi/node-pty 的构建脚本静默不执行；
+- npm 11.19+ 默认拦截 install-scripts，导致 koffi/node-pty 的构建脚本静默不执行（旧版 npm 无此行为，会正常执行）；
 - `sharp` 只提供 linux/darwin/win 预编译，Android 需用其 WebAssembly 版本 `@img/sharp-wasm32`；
 - HMR 插件需要 `--expose-internals`，该参数无法通过 `NODE_OPTIONS` 传入，只能改启动命令行。
 
@@ -134,7 +159,17 @@ dsh web
 
 ### About
 
-Pain-free installation of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`@deepseek-ai/dsh`) on **Android via Termux**, fixing the chain of native build & runtime issues that make the official `npm i -g` fail on Android/arm64. **No root required.** Verified on **Android 16 / aarch64 / Termux**.
+Install [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`@deepseek-ai/dsh`) on **Android via Termux** with a single command — from a **fresh Termux install** to a fully working web UI. Fixes the chain of native build & runtime issues that make the official `npm i -g` fail on Android/arm64. **No root required.** Verified on **Android 16 / aarch64 / Termux**.
+
+### Features
+
+- ✅ **All-in-one**: one command on a fresh Termux, ready to use
+- ✅ **Idempotent**: re-run after any failure to continue; already-installed parts are reused
+- ✅ **Network adaptive**: auto-switches to the npmmirror mirror if the official npm registry is unreachable (8s probe); auto-retries with the mirror on failure; tuned fetch timeouts/retries
+- ✅ **OOM-safe**: koffi build parallelism is capped so low-RAM phones are less likely to get killed
+- ✅ **Default workspace = sdcard**: the web UI reads/writes phone storage out of the box
+- ✅ **Self-verifying**: checks dsh / koffi / node-pty / sharp / sdcard at the end; every failure prints a red error — no more silent deaths
+- ✅ **Mainland-China friendly**: `--cn` flag switches to the npmmirror registry
 
 ### Why this exists
 
@@ -158,6 +193,14 @@ Pain-free installation of [DeepSeek Harness](https://github.com/deepseek-ai/deep
 
 ### Quick start
 
+One-liner (no clone) — run inside Termux:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/cokelaoshi1/android-termux-dsh/main/install.sh)"
+```
+
+Or clone and run:
+
 ```sh
 pkg install -y git
 git clone https://github.com/cokelaoshi1/android-termux-dsh.git
@@ -165,17 +208,9 @@ cd android-termux-dsh
 bash install.sh
 ```
 
-One-liner (no clone):
-
-```sh
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/cokelaoshi1/android-termux-dsh/main/install.sh)"
-```
-
-> The script runs `pkg upgrade` — **let it finish**. Skip it with `bash install.sh --skip-upgrade`.
->
-> 🇨🇳 **Mainland China network**: npm's official registry may time out — add `--cn` to use the npmmirror mirror: `bash install.sh --cn`; if `pkg` mirrors are slow, run `termux-change-repo`.
->
-> If you see `No command dsh found` after the install, the npm step failed — the script now aborts right there with hints (network / disk / build). Paste the last 20 lines into an issue.
+> - The script runs `pkg upgrade` — **let it finish** (partial upgrades are unsupported). Skip it with `bash install.sh --skip-upgrade`
+> - 🇨🇳 **Mainland China network**: use `bash install.sh --cn` for the npmmirror registry; otherwise the script auto-detects (switches if the official registry is unreachable)
+> - The `npm install` step is the longest (hundreds of packages + koffi source build, ~5–15 min). **No output for a while during downloads is normal** — keep the screen on and don't close Termux
 
 ### After install
 
@@ -208,28 +243,42 @@ The Web UI's file tree / workspace root is then the sdcard (`~/storage/shared`),
 
 ### What the script does (all-in-one, fresh Termux)
 
-1. Preflight checks (Termux / architecture)
-2. `pkg update && pkg upgrade` (partial upgrades are unsupported — this must finish)
+1. Preflight checks (Termux / architecture, arm64/armv7 auto-detected)
+2. `pkg update && pkg upgrade` (must finish first)
 3. Install base tools + build chain: `git curl cmake clang make python binutils pkg-config libandroid-spawn`
 4. Install / check Node >= 22.12 (hard requirement)
-5. npm setup: allow install-scripts, optional `--cn` npmmirror registry
-6. Patch node-gyp `common.gypi` (`android_ndk_path`)
-7. `npm i -g @deepseek-ai/dsh` (API 30 target; koffi built from source; auto-retries with npmmirror on failure)
-8. Install the sharp WebAssembly fallback
+5. npm setup: allow install-scripts, tuned fetch timeouts/retries, `--cn` npmmirror
+6. Pre-download Node headers and patch node-gyp `common.gypi` (`android_ndk_path`)
+7. Network probe → `npm i -g @deepseek-ai/dsh` (API 30 target; koffi built from source with capped parallelism; auto-retries with the mirror; hard-checks the `dsh` command afterwards)
+8. Install the sharp WebAssembly fallback (`@img/sharp-wasm32`; mirror retry; idempotent skip)
 9. Install the `--expose-internals` launcher wrapper + pnpm
 10. Grant sdcard storage + pin the workspace (`fs-sandbox.cwd` → `~/storage/shared`)
 11. Verify each piece (dsh / koffi / node-pty / sharp / sdcard) and print startup instructions
 
 The script is **idempotent**: re-run it after any failure to continue; re-run it too after reinstalling dsh via npm to restore steps 8–10.
 
+### Flags & env vars
+
+| Flag / var | Meaning |
+|------------|---------|
+| `--skip-upgrade` | skip `pkg update && pkg upgrade` |
+| `--cn` | force the npmmirror registry (recommended for Mainland China) |
+| `DSH_WORKSPACE=/path` | custom default workspace at install time |
+| `DSH_WORKSPACE=""` | skip the sdcard workspace setup |
+| `CMAKE_BUILD_PARALLEL_LEVEL=N` | koffi build parallelism (default 2; set 1 on low-RAM phones) |
+
 ### Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
 | Node fails with an OpenSSL symbol error / `error while loading shared libraries` | run `pkg update && pkg upgrade -y` first (partial upgrades are unsupported) |
+| `npm error 'allow-scripts' is not a valid npm option` | **harmless**: older npm lacks the script gate and runs build scripts by default — ignore |
 | `CMake does not seem to be available` | re-run the script (toolchain is installed automatically) |
 | node-pty: `android_ndk_path` | re-run the script (the common.gypi patch is idempotent) |
-| Web UI cannot read the sdcard / phone storage | run `termux-setup-storage` and allow the permission (Android 11+ needs "All files access" in system settings); make sure `~/.dsh/profiles/web/cordis.patch.yml` pins `fs-sandbox.cwd` to `~/storage/shared` |
+| `No command dsh found` after install | the npm step failed; the script now aborts right there with hints (network / disk / build / OOM); add `--cn` and re-run |
+| `npm install` step silent for >15 min | network blackhole — Ctrl+C, re-run with `--cn`, or check your proxy/VPN |
+| Script exits mid-way without any error (older versions) | fixed: every step now fails loudly. If it still happens, paste the 10 lines around the stop into an issue |
+| Web UI cannot read the sdcard / phone storage | run `termux-setup-storage` and allow the permission (Android 11+ needs "All files access" in system settings); make sure `cordis.patch.yml` pins `fs-sandbox.cwd` to `~/storage/shared` |
 | `EACCES: permission denied, link ...` when saving sessions | some custom ROMs block `link()`. See [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) and switch `link()` → `rename()` |
 | bash tool: `SANDBOX_UNAVAILABLE` | the sandbox needs Landlock (kernel >= 5.13). Older kernels need a custom proot runner — see [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 
@@ -237,7 +286,7 @@ The script is **idempotent**: re-run it after any failure to continue; re-run it
 
 - Termux clang targets API 24 by default; bionic only exposes `statx()` at API >= 30, hence the `-target aarch64-linux-android30` flag.
 - Termux Node reports `process.platform === 'android'`, so node-gyp evaluates a `common.gypi` referencing `android_ndk_path`, which is only defined when Node itself is built with the NDK.
-- npm 11.19+ skips install scripts by default, silently dropping koffi/node-pty builds.
+- npm 11.19+ skips install scripts by default, silently dropping koffi/node-pty builds (older npm runs them normally).
 - `sharp` ships prebuilds only for linux/darwin/win; Android uses the WebAssembly build `@img/sharp-wasm32`.
 - The HMR plugin hard-requires `--expose-internals`, which cannot be set via `NODE_OPTIONS` — only on the command line.
 

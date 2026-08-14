@@ -54,7 +54,9 @@ esac
 log "架构: $ARCH   编译目标: $TARGET"
 
 # 构建很耗时，尽量保持屏幕常亮
-command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
+if command -v termux-wake-lock >/dev/null 2>&1; then
+  termux-wake-lock
+fi
 
 # ---- 1. 系统更新与编译工具链 ---------------------------------------------------
 if [ "$SKIP_UPGRADE" -eq 0 ]; then
@@ -128,7 +130,10 @@ PY
     ok "已修补 $f"
     patched=1
   done
-  [ "$patched" -eq 0 ] && warn "未找到 node-gyp 缓存；若安装时 node-pty 报 android_ndk_path，重跑本脚本即可"
+  if [ "$patched" -eq 0 ]; then
+    warn "未找到 node-gyp 缓存；若安装时 node-pty 报 android_ndk_path，重跑本脚本即可"
+  fi
+  return 0
 }
 patch_common_gypi
 

@@ -46,7 +46,7 @@
 - Android 11+（API 30+，`statx` 运行时可用）
 - [Termux](https://f-droid.org/packages/com.termux/)（**必须 F-Droid 版**，Play 商店版已废弃）
 - 建议 4GB+ 内存、2GB+ 空闲存储、稳定网络
-- 架构：arm64（主流）或 armv7（脚本自动适配）
+- 架构：arm64（主流）/ armv7 / x86_64 / i686（脚本自动适配）
 
 ### 快速开始
 
@@ -100,7 +100,7 @@ dsh web
 
 ### 脚本做了什么（全新 Termux 一站式）
 
-1. 环境预检（Termux / 架构，arm64/armv7 自动适配）
+1. 环境预检（Termux / 架构自动适配）
 2. `pkg update && pkg upgrade`（必须先完整升级）
 3. 安装基础工具与编译链：`git curl cmake clang make python binutils pkg-config libandroid-spawn`
 4. 安装/检查 Node >= 22.12（dsh 的硬性要求）
@@ -189,7 +189,7 @@ Install [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`@d
 - Android 11+ (API 30+, for `statx` at runtime)
 - [Termux](https://f-droid.org/packages/com.termux/) from **F-Droid** (the Play Store build is abandoned)
 - ~4GB+ RAM, ~2GB+ free storage, stable network
-- arm64 (mainstream) or armv7 (auto-detected)
+- arm64 (mainstream) / armv7 / x86_64 / i686 (auto-detected)
 
 ### Quick start
 
@@ -243,7 +243,7 @@ The Web UI's file tree / workspace root is then the sdcard (`~/storage/shared`),
 
 ### What the script does (all-in-one, fresh Termux)
 
-1. Preflight checks (Termux / architecture, arm64/armv7 auto-detected)
+1. Preflight checks (Termux / architecture, auto-detected)
 2. `pkg update && pkg upgrade` (must finish first)
 3. Install base tools + build chain: `git curl cmake clang make python binutils pkg-config libandroid-spawn`
 4. Install / check Node >= 22.12 (hard requirement)

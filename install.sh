@@ -21,6 +21,12 @@
 # =============================================================================
 set -euo pipefail
 
+# Ctrl+C / 异常退出时清理临时目录
+SWDIR="$HOME/.dsh-termux-sw"
+trap 'rm -rf "$SWDIR"' EXIT
+
+START_TS="$(date +%s)"
+
 SKIP_UPGRADE=0
 CN_MODE=0
 for arg in "$@"; do
@@ -45,8 +51,10 @@ fi
 
 ARCH="$(uname -m)"
 case "$ARCH" in
-  aarch64) TARGET="aarch64-linux-android30" ;;
-  armv7l|armv8l) TARGET="armv7a-linux-androideabi30" ;;
+  aarch64)              TARGET="aarch64-linux-android30" ;;
+  armv7l|armv8l)        TARGET="armv7a-linux-androideabi30" ;;
+  x86_64)               TARGET="x86_64-linux-android30" ;;
+  i686)                 TARGET="i686-linux-android30" ;;
   *)
     warn "未知架构 $ARCH，按 arm64 处理，如编译失败请提交 issue"
     TARGET="aarch64-linux-android30" ;;
@@ -61,13 +69,14 @@ fi
 # ---- 1. 系统更新与编译工具链 ---------------------------------------------------
 if [ "$SKIP_UPGRADE" -eq 0 ]; then
   log "pkg update && pkg upgrade（首次运行较久，务必等它完成）"
-  pkg update -y && pkg upgrade -y
+  pkg update -y
+  pkg upgrade -y
 else
   warn "已跳过 pkg update/upgrade"
 fi
 
-log "安装基础工具与编译工具链: git curl cmake clang make python binutils pkg-config libandroid-spawn"
-pkg install -y git curl cmake clang make python binutils pkg-config libandroid-spawn
+log "安装基础工具与编译工具链: git curl cmake clang make python binutils pkg-config libandroid-spawn termux-tools"
+pkg install -y git curl cmake clang make python binutils pkg-config libandroid-spawn termux-tools
 
 # ---- 2. Node.js >= 22.12（dsh 依赖 commander 15 的硬性要求）-------------------
 if ! command -v node >/dev/null 2>&1; then
@@ -83,7 +92,7 @@ fi
 ok "Node $(node -v)"
 
 # ---- 3. npm 镜像与 install-scripts 放行 -----------------------------------------
-ALLOW_LIST="@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs"
+ALLOW_LIST="@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs,pnpm"
 log "配置 npm：install-scripts 放行 + 网络超时调优"
 if npm config set allow-scripts="$ALLOW_LIST" --location=user 2>/dev/null; then
   ok "npm install-scripts 已放行（新 npm 安全门）"
@@ -196,15 +205,14 @@ wasm_present() { [ -d "$1" ] && ls "$1"/lib/*.wasm >/dev/null 2>&1; }
 if wasm_present "$D/node_modules/@img/sharp-wasm32"; then
   ok "@img/sharp-wasm32 已存在，跳过"
 else
-  SWDIR="$HOME/.dsh-termux-sw"
-  rm -rf "$SWDIR"                 # 清掉上次失败可能留下的残留
+  rm -rf "$SWDIR"                 # 清掉上次失败可能留下的残留（trap 也会兜底清理）
   mkdir -p "$SWDIR"
   cd "$SWDIR" || { fail "无法进入 $SWDIR"; exit 1; }
   npm init -y >/dev/null 2>&1 || true   # 失败无所谓，npm install 不需要 package.json
   log "下载 @img/sharp-wasm32@$SHARP_VER ..."
-  if ! npm install --no-save "@img/sharp-wasm32@$SHARP_VER"; then
+  if ! npm install --no-save --no-audit --no-fund "@img/sharp-wasm32@$SHARP_VER"; then
     warn "官方源安装失败，改用 npmmirror 重试"
-    if ! npm install --no-save --registry=https://registry.npmmirror.com "@img/sharp-wasm32@$SHARP_VER"; then
+    if ! npm install --no-save --no-audit --no-fund --registry=https://registry.npmmirror.com "@img/sharp-wasm32@$SHARP_VER"; then
       fail "@img/sharp-wasm32 下载/安装失败（见上方输出）——请检查网络后重跑本脚本"
       exit 1
     fi
@@ -241,7 +249,7 @@ ok "包装器已写入 $PREFIX/bin/dsh"
 # ---- 8. pnpm（dsh plugin 子命令依赖）------------------------------------------
 if ! command -v pnpm >/dev/null 2>&1; then
   log "安装 pnpm（dsh plugin 管理用）"
-  npm install -g pnpm
+  npm install -g --no-audit --no-fund pnpm
 fi
 
 # ---- 8.5 sdcard 存储权限 + 默认工作区（Android 11+ 作用域存储）------------------
@@ -310,6 +318,9 @@ else
   warn "sdcard 暂不可访问——运行 dsh web 后如无法读取手机存储，请先执行 termux-setup-storage 并授权"
 fi
 
+echo ""
+ELAPSED="$(( $(date +%s) - START_TS ))"
+echo "   总耗时: $((ELAPSED / 60)) 分 $((ELAPSED % 60)) 秒"
 echo ""
 if [ "$FAIL" -eq 0 ]; then
   echo "✅ 全部通过！启动方式："

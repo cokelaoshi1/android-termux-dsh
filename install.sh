@@ -11,17 +11,20 @@
 #   - sharp 无 android-arm64 预编译（@img/sharp-wasm32 WebAssembly 兜底）
 #   - HMR 插件硬要求 --expose-internals（dsh 启动包装器）
 #
-# 用法： bash install.sh [--skip-upgrade]
+# 用法： bash install.sh [--skip-upgrade] [--cn]
+#        --cn            使用 npmmirror 镜像源（中国大陆网络推荐）
 # 环境： Termux（F-Droid 版），Android 11+，arm64 / armv7
 # =============================================================================
 set -euo pipefail
 
 SKIP_UPGRADE=0
+CN_MODE=0
 for arg in "$@"; do
   case "$arg" in
     --skip-upgrade) SKIP_UPGRADE=1 ;;
-    -h|--help) sed -n '1,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "未知参数: $arg（可用 --skip-upgrade）"; exit 1 ;;
+    --cn) CN_MODE=1 ;;
+    -h|--help) sed -n '1,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "未知参数: $arg（可用 --skip-upgrade / --cn）"; exit 1 ;;
   esac
 done
 
@@ -73,10 +76,16 @@ if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt
 fi
 ok "Node $(node -v)"
 
-# ---- 3. 放行 npm install-scripts（npm 11.19+ 默认跳过构建脚本）-----------------
+# ---- 3. npm 镜像与 install-scripts 放行 -----------------------------------------
 ALLOW_LIST="@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs"
 log "配置 npm allow-scripts 放行原生模块构建脚本"
 npm config set allow-scripts="$ALLOW_LIST" --location=user || warn "npm 不支持 allow-scripts 配置（旧版 npm，忽略）"
+
+if [ "$CN_MODE" -eq 1 ]; then
+  log "使用 npmmirror 镜像源（--cn）"
+  npm config set registry https://registry.npmmirror.com --location=user
+  warn "若 pkg 更新源也慢/失败，可运行 termux-change-repo 选择国内镜像"
+fi
 
 # ---- 4. node-gyp common.gypi 补丁（android_ndk_path）--------------------------
 log "预下载 Node 头文件并修补 common.gypi"
@@ -119,6 +128,18 @@ if ! npm install -g --foreground-scripts @deepseek-ai/dsh; then
   npm install -g --foreground-scripts @deepseek-ai/dsh
 fi
 unset CFLAGS CXXFLAGS
+
+# 硬性检查：npm 装完必须有 dsh 命令，否则立刻报错（而不是最后才暴露）
+if ! command -v dsh >/dev/null 2>&1; then
+  echo ""
+  echo "✗✗ 错误: npm 安装结束后仍未找到 dsh 命令 ✗✗"
+  echo "   说明上面 npm install 实际失败了（常见原因）："
+  echo "   1) 网络问题：npm 官方源超时/断连 —— 中国大陆网络请加 --cn 参数重跑，或先: npm config set registry https://registry.npmmirror.com"
+  echo "   2) 磁盘空间不足 —— 检查: df -h \$PREFIX"
+  echo "   3) 编译失败 —— 向上翻终端找 \"npm error\" 开头的行，把最后 20 行发到仓库 issue"
+  exit 1
+fi
+ok "dsh 命令已就位: $(command -v dsh)"
 
 D="$PREFIX/lib/node_modules/@deepseek-ai/dsh"
 [ -d "$D" ] || { echo "错误: 安装完成后未找到 $D"; exit 1; }

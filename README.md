@@ -53,6 +53,10 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/cokelaoshi1/android-term
 ```
 
 > 脚本会执行 `pkg upgrade`，**务必等它跑完**。想跳过系统更新：`bash install.sh --skip-upgrade`。
+>
+> 🇨🇳 **中国大陆网络**：npm 官方源可能超时，加 `--cn` 参数改用 npmmirror 镜像：`bash install.sh --cn`；`pkg` 更新源慢可运行 `termux-change-repo` 选国内镜像。
+>
+> 安装结束后若提示 `No command dsh found`，说明 npm 安装步骤失败了——脚本现在会在失败点直接报错并给出排查提示（网络/磁盘/编译），或把最后 20 行输出发到 issue。
 
 ### 安装完成后
 
@@ -168,6 +172,10 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/cokelaoshi1/android-term
 ```
 
 > The script runs `pkg upgrade` — **let it finish**. Skip it with `bash install.sh --skip-upgrade`.
+>
+> 🇨🇳 **Mainland China network**: npm's official registry may time out — add `--cn` to use the npmmirror mirror: `bash install.sh --cn`; if `pkg` mirrors are slow, run `termux-change-repo`.
+>
+> If you see `No command dsh found` after the install, the npm step failed — the script now aborts right there with hints (network / disk / build). Paste the last 20 lines into an issue.
 
 ### After install
 

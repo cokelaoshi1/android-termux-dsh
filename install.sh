@@ -2,6 +2,10 @@
 # =============================================================================
 # dsh-termux-installer
 # 在 Termux (Android) 上一键安装 DeepSeek Harness (@deepseek-ai/dsh)
+# 面向【全新安装的 Termux】：跑完本脚本即可直接使用，无需任何手动步骤。
+# 涵盖：pkg 更新 → 基础工具/编译链/Node → npm 配置与镜像 → common.gypi 补丁
+#       → dsh 全局安装（原生模块源码编译）→ sharp wasm 兜底 → 启动包装器
+#       → sdcard 存储授权与默认工作区 → 逐项验证
 #
 # 已解决的关键问题：
 #   - koffi / node-pty 无 android 预编译，需现场编译
@@ -60,8 +64,8 @@ else
   warn "已跳过 pkg update/upgrade"
 fi
 
-log "安装编译工具链: cmake clang make python binutils pkg-config libandroid-spawn"
-pkg install -y cmake clang make python binutils pkg-config libandroid-spawn
+log "安装基础工具与编译工具链: git curl cmake clang make python binutils pkg-config libandroid-spawn"
+pkg install -y git curl cmake clang make python binutils pkg-config libandroid-spawn
 
 # ---- 2. Node.js >= 22.12（dsh 依赖 commander 15 的硬性要求）-------------------
 if ! command -v node >/dev/null 2>&1; then
@@ -125,6 +129,10 @@ export CXXFLAGS="-target $TARGET"
 if ! npm install -g --foreground-scripts @deepseek-ai/dsh; then
   warn "首次安装失败，修补 common.gypi 后重试一次"
   patch_common_gypi
+  if [ "$CN_MODE" -eq 0 ]; then
+    warn "仍失败则自动切换 npmmirror 镜像源再试（中国大陆网络常见）"
+    npm config set registry https://registry.npmmirror.com --location=user || true
+  fi
   npm install -g --foreground-scripts @deepseek-ai/dsh
 fi
 unset CFLAGS CXXFLAGS
@@ -137,6 +145,7 @@ if ! command -v dsh >/dev/null 2>&1; then
   echo "   1) 网络问题：npm 官方源超时/断连 —— 中国大陆网络请加 --cn 参数重跑，或先: npm config set registry https://registry.npmmirror.com"
   echo "   2) 磁盘空间不足 —— 检查: df -h \$PREFIX"
   echo "   3) 编译失败 —— 向上翻终端找 \"npm error\" 开头的行，把最后 20 行发到仓库 issue"
+  echo "   4) 若反复失败，可重跑本脚本（幂等，会自动续上）"
   exit 1
 fi
 ok "dsh 命令已就位: $(command -v dsh)"

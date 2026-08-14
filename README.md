@@ -15,7 +15,7 @@
 
 ### 简介
 
-在 **Android Termux** 上无痛安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`@deepseek-ai/dsh`），解决官方 `npm i -g` 在 Android/arm64 上无法完成的一连串原生编译与运行时问题。**无需 root**（有 root 也不影响），已在 **Android 16 / aarch64 / Termux** 实测通过。
+在 **Android Termux** 上从零一键安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`@deepseek-ai/dsh`）。**适用于全新安装的 Termux**：跑完 `install.sh` 一条命令，pkg 更新、工具链、Node、原生模块编译、运行时修补、存储权限全部自动完成，无需任何手动步骤。解决官方 `npm i -g` 在 Android/arm64 上无法完成的一连串原生编译与运行时问题。**无需 root**（有 root 也不影响），已在 **Android 16 / aarch64 / Termux** 实测通过。
 
 ### 为什么需要它
 
@@ -87,19 +87,19 @@ dsh web
 - 想改默认值：编辑上面那个 `cordis.patch.yml` 的 `cwd`，重启 `dsh web` 生效
 - 若提示「未找到 ~/storage/shared」：到 系统设置 → 应用 → Termux → 权限，手动允许「文件和媒体」后重跑脚本
 
-### 脚本做了什么
+### 脚本做了什么（全新 Termux 一站式）
 
 1. 环境预检（Termux / 架构）
-2. `pkg update && pkg upgrade`
-3. 安装编译工具链
-4. 检查 Node >= 22.12（dsh 的硬性要求）
-5. 放行 npm install-scripts
+2. `pkg update && pkg upgrade`（Termux 不支持部分升级，必须先完整升级）
+3. 安装基础工具与编译链：`git curl cmake clang make python binutils pkg-config libandroid-spawn`
+4. 安装/检查 Node >= 22.12（dsh 的硬性要求）
+5. 配置 npm：放行 install-scripts、可选 `--cn` 切换 npmmirror 镜像
 6. 修补 node-gyp `common.gypi`（`android_ndk_path`）
-7. `npm i -g @deepseek-ai/dsh`（带 API 30 编译参数，koffi 源码编译）
+7. `npm i -g @deepseek-ai/dsh`（带 API 30 编译参数，koffi 源码编译；失败自动切镜像重试）
 8. 安装 sharp WebAssembly 兜底
 9. 安装 `--expose-internals` 启动包装器 + pnpm
 10. sdcard 存储授权 + 默认工作区配置（fs-sandbox.cwd → `~/storage/shared`）
-11. 逐项验证（dsh / koffi / node-pty / sharp / sdcard）
+11. 逐项验证（dsh / koffi / node-pty / sharp / sdcard）并输出启动指引
 
 脚本**幂等**：任何一步失败直接重跑即可续上；重新执行过 `npm i -g @deepseek-ai/dsh` 后，也建议重跑一次恢复第 8、9、10 步。
 
@@ -206,19 +206,19 @@ The Web UI's file tree / workspace root is then the sdcard (`~/storage/shared`),
 - Change the default: edit `cwd` in `cordis.patch.yml` above and restart `dsh web`
 - If you see "~/storage/shared not found": grant storage to Termux manually (Settings → Apps → Termux → Permissions → Files and media) and re-run the script
 
-### What the script does
+### What the script does (all-in-one, fresh Termux)
 
 1. Preflight checks (Termux / architecture)
-2. `pkg update && pkg upgrade`
-3. Install the build toolchain
-4. Ensure Node >= 22.12 (hard requirement)
-5. Allow npm install-scripts
+2. `pkg update && pkg upgrade` (partial upgrades are unsupported — this must finish)
+3. Install base tools + build chain: `git curl cmake clang make python binutils pkg-config libandroid-spawn`
+4. Install / check Node >= 22.12 (hard requirement)
+5. npm setup: allow install-scripts, optional `--cn` npmmirror registry
 6. Patch node-gyp `common.gypi` (`android_ndk_path`)
-7. `npm i -g @deepseek-ai/dsh` (API 30 target; koffi built from source)
+7. `npm i -g @deepseek-ai/dsh` (API 30 target; koffi built from source; auto-retries with npmmirror on failure)
 8. Install the sharp WebAssembly fallback
 9. Install the `--expose-internals` launcher wrapper + pnpm
 10. Grant sdcard storage + pin the workspace (`fs-sandbox.cwd` → `~/storage/shared`)
-11. Verify each piece (dsh / koffi / node-pty / sharp / sdcard)
+11. Verify each piece (dsh / koffi / node-pty / sharp / sdcard) and print startup instructions
 
 The script is **idempotent**: re-run it after any failure to continue; re-run it too after reinstalling dsh via npm to restore steps 8–10.
 

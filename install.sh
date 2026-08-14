@@ -182,14 +182,46 @@ D="$PREFIX/lib/node_modules/@deepseek-ai/dsh"
 
 # ---- 6. sharp WebAssembly 兜底（sharp 无 android-arm64 预编译）-----------------
 SHARP_VER="$(python3 -c "import json;print(json.load(open('$D/node_modules/sharp/package.json'))['version'])")"
+if [ -z "$SHARP_VER" ]; then
+  fail "读取 sharp 版本失败（$D/node_modules/sharp/package.json 不存在？）"
+  exit 1
+fi
 log "安装 sharp@$SHARP_VER 的 WebAssembly 兜底 (@img/sharp-wasm32)"
-mkdir -p "$HOME/.dsh-termux-sw" && cd "$HOME/.dsh-termux-sw" && npm init -y >/dev/null 2>&1
-npm install --no-save "@img/sharp-wasm32@$SHARP_VER" >/dev/null
-rm -rf "$D/node_modules/@img/sharp-wasm32" "$D/node_modules/@emnapi"
-cp -r node_modules/@img/sharp-wasm32 "$D/node_modules/@img/"
-cp -r node_modules/@emnapi "$D/node_modules/"
-cd "$HOME" && rm -rf "$HOME/.dsh-termux-sw"
-ok "sharp wasm 兜底已就位"
+
+if [ -f "$D/node_modules/@img/sharp-wasm32/sharp.node" ]; then
+  ok "@img/sharp-wasm32 已存在，跳过"
+else
+  SWDIR="$HOME/.dsh-termux-sw"
+  rm -rf "$SWDIR"                 # 清掉上次失败可能留下的残留
+  mkdir -p "$SWDIR"
+  cd "$SWDIR" || { fail "无法进入 $SWDIR"; exit 1; }
+  npm init -y >/dev/null 2>&1 || true   # 失败无所谓，npm install 不需要 package.json
+  log "下载 @img/sharp-wasm32@$SHARP_VER ..."
+  if ! npm install --no-save "@img/sharp-wasm32@$SHARP_VER"; then
+    warn "官方源安装失败，改用 npmmirror 重试"
+    if ! npm install --no-save --registry=https://registry.npmmirror.com "@img/sharp-wasm32@$SHARP_VER"; then
+      fail "@img/sharp-wasm32 下载/安装失败（见上方输出）——请检查网络后重跑本脚本"
+      exit 1
+    fi
+  fi
+  if [ ! -f node_modules/@img/sharp-wasm32/sharp.node ]; then
+    fail "sharp-wasm32 安装结果异常（sharp.node 不存在）"
+    exit 1
+  fi
+  rm -rf "$D/node_modules/@img/sharp-wasm32" "$D/node_modules/@emnapi"
+  mkdir -p "$D/node_modules/@img"
+  cp -r node_modules/@img/sharp-wasm32 "$D/node_modules/@img/"
+  if [ -d node_modules/@emnapi ]; then
+    cp -r node_modules/@emnapi "$D/node_modules/"
+  fi
+  cd "$HOME" || exit 1
+  rm -rf "$SWDIR"
+  if [ ! -f "$D/node_modules/@img/sharp-wasm32/sharp.node" ]; then
+    fail "sharp-wasm32 复制到 dsh 失败"
+    exit 1
+  fi
+  ok "sharp wasm 兜底已就位"
+fi
 
 # ---- 7. dsh 启动包装器（HMR 插件硬要求 --expose-internals）---------------------
 log "安装 dsh 启动包装器（--expose-internals）"

@@ -139,6 +139,7 @@ dsh web
 | 网页版读不了 sdcard / 看不到手机存储 | 运行 `termux-setup-storage` 并允许权限（Android 11+ 需开启「所有文件访问」）；再确认 `cordis.patch.yml` 里 `fs-sandbox.cwd` 指向 `~/storage/shared` |
 | 会话保存报 `EACCES: permission denied, link ...` | 部分定制 ROM 全局禁用 `link()`。脚本第 9 步已自动应用 `link() → rename()` 补丁，重跑脚本即可修复；见 [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) |
 | 命令执行报 `[timed out after Xms]` / `[killed by signal: SIGTERM]` | bash 工具超时。慢设备上耗时命令请用 `run_in_background: true`；若每次都超时，确认内核 >= 5.13（Landlock），老内核的沙箱兜底会拖慢每次执行 |
+| `Tool call Error unknown tool ""` | 模型/API 返回了畸形工具调用（流式 `tool_calls` 里 `name` 缺失或后到）。改用官方 `api.deepseek.com` + 模型 `deepseek-chat`（不要用 deepseek-reasoner 或工具支持差的第三方中转），新建会话重试 |
 | bash 工具报 `SANDBOX_UNAVAILABLE` | 沙箱需要 Landlock（内核 >= 5.13）。老内核机型需自建 proot runner，见 [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 
 ### 原理简述
@@ -284,6 +285,7 @@ The script is **idempotent**: re-run it after any failure to continue; re-run it
 | Web UI cannot read the sdcard / phone storage | run `termux-setup-storage` and allow the permission (Android 11+ needs "All files access" in system settings); make sure `cordis.patch.yml` pins `fs-sandbox.cwd` to `~/storage/shared` |
 | `EACCES: permission denied, link ...` when saving sessions | some custom ROMs block `link()`. Step 9 of the script already applies the `link() → rename()` patch — re-run it to fix; see [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) |
 | Commands fail with `[timed out after Xms]` / `[killed by signal: SIGTERM]` | bash-tool timeout. Use `run_in_background: true` for long commands on slow devices; if every call times out, make sure the kernel is >= 5.13 (Landlock) — the sandbox fallback on older kernels slows each call |
+| `Tool call Error unknown tool ""` | the model/API returned a malformed tool call (the streamed `tool_calls` had a missing or late `name`). Use the official `api.deepseek.com` endpoint with model `deepseek-chat` (avoid `deepseek-reasoner` or poorly tool-capable third-party relays) and start a new session |
 | bash tool: `SANDBOX_UNAVAILABLE` | the sandbox needs Landlock (kernel >= 5.13). Older kernels need a custom proot runner — see [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 
 ### How it works (short version)

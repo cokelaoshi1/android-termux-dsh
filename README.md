@@ -108,9 +108,10 @@ dsh web
 6. 预下载 Node 头文件并修补 node-gyp `common.gypi`（`android_ndk_path`）
 7. 网络预检 → `npm i -g @deepseek-ai/dsh`（API 30 编译参数；koffi 源码编译，限并行防 OOM；失败自动换源重试；装完硬检查 `dsh` 命令）
 8. 安装 sharp WebAssembly 兜底（`@img/sharp-wasm32`，失败自动换源，幂等跳过）
-9. 安装 `--expose-internals` 启动包装器 + pnpm
-10. sdcard 存储授权 + 默认工作区配置（fs-sandbox.cwd → `~/storage/shared`）
-11. 逐项验证（dsh / koffi / node-pty / sharp / sdcard）并输出启动指引
+9. 应用 `link() → rename()` 补丁（部分定制 ROM 禁用 `link()` 系统调用）
+10. 安装 `--expose-internals` 启动包装器 + pnpm
+11. sdcard 存储授权 + 默认工作区配置（fs-sandbox.cwd → `~/storage/shared`）
+12. 逐项验证（dsh / koffi / node-pty / sharp / sdcard）并输出启动指引
 
 脚本**幂等**：任何一步失败直接重跑即可续上；重新执行过 `npm i -g @deepseek-ai/dsh` 后，也建议重跑一次恢复第 8、9、10 步。
 
@@ -136,7 +137,8 @@ dsh web
 | `npm install` 那步超过 15 分钟无任何输出 | 网络黑洞，Ctrl+C 后用 `--cn` 重跑，或检查代理/VPN |
 | 安装中途无报错就退出（旧版本脚本） | 已修复：所有步骤现在失败必红字。若仍遇到，把停住前后 10 行发 issue |
 | 网页版读不了 sdcard / 看不到手机存储 | 运行 `termux-setup-storage` 并允许权限（Android 11+ 需开启「所有文件访问」）；再确认 `cordis.patch.yml` 里 `fs-sandbox.cwd` 指向 `~/storage/shared` |
-| 会话保存报 `EACCES: permission denied, link ...` | 部分定制 ROM 全局禁用 `link()`。参考 [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) 把 `link()` 改成 `rename()` |
+| 会话保存报 `EACCES: permission denied, link ...` | 部分定制 ROM 全局禁用 `link()`。脚本第 9 步已自动应用 `link() → rename()` 补丁，重跑脚本即可修复；见 [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) |
+| 命令执行报 `[timed out after Xms]` / `[killed by signal: SIGTERM]` | bash 工具超时。慢设备上耗时命令请用 `run_in_background: true`；若每次都超时，确认内核 >= 5.13（Landlock），老内核的沙箱兜底会拖慢每次执行 |
 | bash 工具报 `SANDBOX_UNAVAILABLE` | 沙箱需要 Landlock（内核 >= 5.13）。老内核机型需自建 proot runner，见 [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 
 ### 原理简述
@@ -251,9 +253,10 @@ The Web UI's file tree / workspace root is then the sdcard (`~/storage/shared`),
 6. Pre-download Node headers and patch node-gyp `common.gypi` (`android_ndk_path`)
 7. Network probe → `npm i -g @deepseek-ai/dsh` (API 30 target; koffi built from source with capped parallelism; auto-retries with the mirror; hard-checks the `dsh` command afterwards)
 8. Install the sharp WebAssembly fallback (`@img/sharp-wasm32`; mirror retry; idempotent skip)
-9. Install the `--expose-internals` launcher wrapper + pnpm
-10. Grant sdcard storage + pin the workspace (`fs-sandbox.cwd` → `~/storage/shared`)
-11. Verify each piece (dsh / koffi / node-pty / sharp / sdcard) and print startup instructions
+9. Apply the `link() → rename()` patch (some custom ROMs block the `link()` syscall)
+10. Install the `--expose-internals` launcher wrapper + pnpm
+11. Grant sdcard storage + pin the workspace (`fs-sandbox.cwd` → `~/storage/shared`)
+12. Verify each piece (dsh / koffi / node-pty / sharp / sdcard) and print startup instructions
 
 The script is **idempotent**: re-run it after any failure to continue; re-run it too after reinstalling dsh via npm to restore steps 8–10.
 
@@ -279,7 +282,8 @@ The script is **idempotent**: re-run it after any failure to continue; re-run it
 | `npm install` step silent for >15 min | network blackhole — Ctrl+C, re-run with `--cn`, or check your proxy/VPN |
 | Script exits mid-way without any error (older versions) | fixed: every step now fails loudly. If it still happens, paste the 10 lines around the stop into an issue |
 | Web UI cannot read the sdcard / phone storage | run `termux-setup-storage` and allow the permission (Android 11+ needs "All files access" in system settings); make sure `cordis.patch.yml` pins `fs-sandbox.cwd` to `~/storage/shared` |
-| `EACCES: permission denied, link ...` when saving sessions | some custom ROMs block `link()`. See [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) and switch `link()` → `rename()` |
+| `EACCES: permission denied, link ...` when saving sessions | some custom ROMs block `link()`. Step 9 of the script already applies the `link() → rename()` patch — re-run it to fix; see [discussion #248](https://github.com/deepseek-ai/deepseek-harness/discussions/248) |
+| Commands fail with `[timed out after Xms]` / `[killed by signal: SIGTERM]` | bash-tool timeout. Use `run_in_background: true` for long commands on slow devices; if every call times out, make sure the kernel is >= 5.13 (Landlock) — the sandbox fallback on older kernels slows each call |
 | bash tool: `SANDBOX_UNAVAILABLE` | the sandbox needs Landlock (kernel >= 5.13). Older kernels need a custom proot runner — see [discussion #136](https://github.com/deepseek-ai/deepseek-harness/discussions/136) |
 
 ### How it works (short version)

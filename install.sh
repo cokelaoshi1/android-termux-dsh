@@ -189,6 +189,69 @@ ok "dsh 命令已就位: $(command -v dsh)"
 D="$PREFIX/lib/node_modules/@deepseek-ai/dsh"
 [ -d "$D" ] || { echo "错误: 安装完成后未找到 $D"; exit 1; }
 
+# ---- 5.5 link() -> rename() 补丁（部分定制 ROM 全局禁用 link() 系统调用）---------
+# 症状：会话保存报 EACCES: permission denied, link '...session.jsonl.zstd.tmp' -> '...'
+# 方案（来自 upstream discussion #248）：把 dsh-session-persistence-jsonl 与
+# dsh-attachment-local 里的原子发布从 link() 改为 rename()（rename 同目录原子且
+# 在所有 ROM 上都可用）。幂等：已修补则跳过。
+patch_link_rename() {
+  local f patched=0
+
+  f="$D/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js"
+  if [ -f "$f" ]; then
+    if grep -q "await rename(tmp, finalPath)" "$f"; then
+      patched=1
+    elif grep -q "await link(tmp, finalPath)" "$f"; then
+      python3 - "$f" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace(
+    'import { link, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, stat, truncate } from "node:fs/promises";',
+    'import { link, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat, truncate } from "node:fs/promises";',
+)
+s = s.replace("await link(tmp, finalPath);", "await rename(tmp, finalPath);")
+open(p, "w").write(s)
+PY
+      ok "已修补 $f（link -> rename）"
+      patched=1
+    fi
+  fi
+
+  f="$D/node_modules/@deepseek-ai/dsh-attachment-local/lib/index.js"
+  if [ -f "$f" ]; then
+    if grep -q "await rename(temporary, target)" "$f"; then
+      patched=1
+    elif grep -q "await link(temporary, target)" "$f"; then
+      python3 - "$f" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace(
+    'import { chmod, link, mkdir, open, readFile, unlink } from "node:fs/promises";',
+    'import { chmod, link, mkdir, open, readFile, rename, unlink } from "node:fs/promises";',
+)
+s = s.replace("await link(temporary, target);", "await rename(temporary, target);")
+# rename 后 staging 文件已不存在，必须容忍 unlink 的 ENOENT（只改 saveImageFile 内那一处）
+old = "await unlink(temporary);"
+new = ('await unlink(temporary).catch((cleanupError) => {\n'
+       '\t\t\tif (!(cleanupError instanceof Error && "code" in cleanupError && cleanupError.code === "ENOENT")) throw cleanupError;\n'
+       '\t\t});')
+idx = s.find(old)
+if idx != -1:
+    s = s[:idx] + new + s[idx + len(old):]
+open(p, "w").write(s)
+PY
+      ok "已修补 $f（link -> rename）"
+      patched=1
+    fi
+  fi
+
+  [ "$patched" -eq 0 ] && warn "link() 补丁未命中（包结构可能已变化，遇到 EACCES link 报错请发 issue）"
+  return 0
+}
+patch_link_rename
+
 # ---- 6. sharp WebAssembly 兜底（sharp 无 android-arm64 预编译）-----------------
 SHARP_VER="$(python3 -c "import json;print(json.load(open('$D/node_modules/sharp/package.json'))['version'])")"
 if [ -z "$SHARP_VER" ]; then

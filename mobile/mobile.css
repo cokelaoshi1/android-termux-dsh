@@ -1,0 +1,86 @@
+/* =============================================================================
+ * dsh web —— 手机端适配样式 (mobile.css)
+ * -----------------------------------------------------------------------------
+ * 适用：在手机浏览器打开 dsh web (http://127.0.0.1:3080) 时注入。
+ *
+ * 用法（任选其一）：
+ *   A. Tampermonkey / Violentmonkey：装 dsh-mobile.user.js（自动注入）
+ *   B. 无扩展浏览器：把 bookmarklet.txt 存成书签，打开页面后点一下
+ *   C. 手动：浏览器控制台执行
+ *        fetch('https://raw.githubusercontent.com/cokelaoshi1/android-termux-dsh/main/mobile/mobile.css')
+ *          .then(r=>r.text()).then(css=>{const t=document.createElement('style');t.textContent=css;document.head.appendChild(t)})
+ *
+ * 原理：dsh 的样式是 CSS Modules（类名带构建哈希，如 pI_x6G_frame），但
+ *       类名【后缀】（_frame/_sidebarCol/_centerCol/_detailsCol）与框架级
+ *       data-* 属性（data-sidebar-collapsed / data-details-collapsed）是稳定的，
+ *       这里全部用「稳定后缀 + 属性」选择器，跨版本可用。
+ * 说明：dsh 在窄视口下已会自动把侧栏折叠成图标栏（rail），本样式补齐：
+ *       1) 窄屏强制单列，聊天区占满
+ *       2) 右侧详情栏（预览/文件变更）窄屏默认收起，避免挤压聊天
+ *       3) 弹窗、输入区、触控目标适配小屏
+ * ========================================================================== */
+
+/* ---- 1. 窄屏(<900px)强制单列 + 收起右侧详情栏 ------------------------------ */
+@media (max-width: 900px) {
+  /* 布局骨架：三栏 grid 强制成单列，聊天区占满宽度 */
+  [class$="_frame"] {
+    grid-template-columns: 100% !important;
+  }
+
+  /* 右侧详情栏（预览/文件变更等）窄屏默认隐藏，避免挤压聊天区 */
+  [class$="_detailsCol"] {
+    display: none !important;
+  }
+
+  /* 侧栏图标栏(rail)保留——dsh 窄屏自动折叠，这里确保它不占横向空间 */
+  [class$="_sidebarCol"] {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+}
+
+/* ---- 2. 小屏(<480px)进一步收紧 -------------------------------------------- */
+@media (max-width: 480px) {
+  /* 设置等大弹窗改为近全屏，避免横向滚动 */
+  [class$="_panel"],
+  [class$="_overlay"] [class$="_panel"] {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+
+  /* 允许用户双指缩放（页面默认禁用了缩放） */
+  /* 注：需要在控制台执行 document.querySelector('meta[name=viewport]').content =
+        'width=device-width, initial-scale=1' 或由 user.js 处理 */
+}
+
+/* ---- 3. 通用触控与可读性 ------------------------------------------------ */
+@media (max-width: 900px) {
+  /* 触控目标不小于 44px，方便手指点按 */
+  [class$="_button"],
+  [class$="_trigger"],
+  [class$="_cell"],
+  [class$="_close"] {
+    min-height: 40px;
+  }
+
+  /* 代码块/长内容允许横向滚动而不是撑破布局 */
+  pre,
+  code,
+  [class$="_code"] {
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
+  }
+
+  /* 输入框不溢出 */
+  textarea,
+  input {
+    font-size: 16px !important; /* 防 iOS 聚焦自动放大 */
+  }
+}
+
+/* ---- 4. 手动开关（可选）----------------------------------------------- */
+/* 想临时看右侧面板：窄屏下执行下面这行即可恢复显示
+   [...document.querySelectorAll('[class$="_detailsCol"]')].forEach(e=>e.style.display='') */

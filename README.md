@@ -98,6 +98,18 @@ dsh web
 - 想改默认值：编辑上面那个 `cordis.patch.yml` 的 `cwd`，重启 `dsh web` 生效
 - 若提示「未找到 ~/storage/shared」：到 系统设置 → 应用 → Termux → 权限，手动允许「文件和媒体」后重跑脚本
 
+### 手机端适配（可选）
+
+dsh 网页版在窄视口下会自动把侧栏折叠成图标栏，但右侧面板（预览/文件变更）不会自动收起，手机上聊天区会被挤占。仓库提供一套移动端样式（`mobile/` 目录），三种注入方式任选：
+
+| 方式 | 适用 | 说明 |
+|------|------|------|
+| `mobile/dsh-mobile.user.js` | 支持扩展的浏览器（Kiwi / Firefox + Tampermonkey/Violentmonkey） | 打开页面自动注入，无需手动 |
+| `mobile/bookmarklet.txt` | 任意浏览器 | 把 `javascript:` 代码存成书签，打开页面后点一下 |
+| `mobile/mobile.css` | 手动 | 控制台 fetch 注入，或配合 Stylus 扩展 |
+
+效果：窄屏强制单列布局、右侧面板自动隐藏（聊天区占满）、弹窗近全屏、触控目标加大、放开页面缩放。
+
 ### 脚本做了什么（全新 Termux 一站式）
 
 1. 环境预检（Termux / 架构自动适配）
@@ -243,6 +255,18 @@ The Web UI's file tree / workspace root is then the sdcard (`~/storage/shared`),
 - Custom workspace at install time: `DSH_WORKSPACE=/path/to/dir bash install.sh`; skip: `DSH_WORKSPACE="" bash install.sh`
 - Change the default: edit `cwd` in `cordis.patch.yml` above and restart `dsh web`
 - If you see "~/storage/shared not found": grant storage to Termux manually (Settings → Apps → Termux → Permissions → Files and media) and re-run the script
+
+### Mobile adaptation (optional)
+
+The dsh web UI auto-collapses the sidebar to a rail on narrow viewports, but the right-side panels (preview / file changes) stay open and squeeze the chat on phones. This repo ships a mobile stylesheet in `mobile/`, injectable three ways:
+
+| Way | Browser | Notes |
+|-----|---------|-------|
+| `mobile/dsh-mobile.user.js` | extension-capable (Kiwi / Firefox + Tampermonkey/Violentmonkey) | auto-injects on page load |
+| `mobile/bookmarklet.txt` | any browser | save the `javascript:` snippet as a bookmark and tap it after loading |
+| `mobile/mobile.css` | manual | fetch-inject from the console, or use with the Stylus extension |
+
+Effects: single-column layout on narrow screens, right panels hidden (chat fills the width), near-fullscreen modals, larger touch targets, zoom re-enabled.
 
 ### What the script does (all-in-one, fresh Termux)
 

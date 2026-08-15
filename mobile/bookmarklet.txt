@@ -1,0 +1,8 @@
+# 手机端适配 — 书签小工具 (bookmarklet)
+# 用法：
+#   1) 手机浏览器（任意，无需装扩展）新建书签，名字随意（如 "dsh 移动版"）
+#   2) 把下面这一整行 javascript: 代码粘贴到书签的「网址」栏
+#   3) 打开 dsh web (http://127.0.0.1:3080) 后，点这个书签即注入移动端样式
+# 提示：每次刷新页面需要重新点一次；想自动注入请用 dsh-mobile.user.js（需 Tampermonkey/Violentmonkey，Kiwi 浏览器可装）
+
+javascript:(function(){var C='@media (max-width:900px){[class$="_frame"]{grid-template-columns:100% !important}[class$="_detailsCol"]{display:none !important}[class$="_sidebarCol"]{width:auto !important;min-width:0 !important}[class$="_button"],[class$="_trigger"],[class$="_cell"],[class$="_close"]{min-height:40px}pre,code,[class$="_code"]{white-space:pre-wrap !important;word-break:break-all !important}textarea,input{font-size:16px !important}}@media (max-width:480px){[class$="_panel"]{width:100vw !important;max-width:100vw !important;height:100vh !important;max-height:100vh !important;border-radius:0 !important}}';if(document.getElementById('dsh-mobile-css'))return;var t=document.createElement('style');t.id='dsh-mobile-css';t.textContent=C;document.head.appendChild(t);var v=document.querySelector('meta[name=viewport]');if(v)v.setAttribute('content','width=device-width, initial-scale=1');})();
